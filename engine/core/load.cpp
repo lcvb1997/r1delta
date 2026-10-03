@@ -133,6 +133,7 @@
 #include "precache.h"
 #include "auth.h"
 #include "bot.h"
+#include "bot_control.h"
 #include "physics_hooks.h"
 #include "vphysics_shutdown_guard.h"
 #include "chat.h"
@@ -9188,6 +9189,7 @@ do_server(const LDR_DLL_NOTIFICATION_DATA* notification_data)
 	}
 	else {
 		RegisterServerUserCmdConVars();
+		RegisterBotControlConVars();
 		RegisterConCommand("updatescriptdata", updatescriptdata_cmd, "Dumps the script data in the AI node graph to disk", FCVAR_CHEAT);
 		RegisterConCommand("verifyain", verifyain_cmd, "Reads the .ain file from disk, compares its nodes & links to in-memory data, logs differences.", FCVAR_CHEAT);
 		RegisterConCommand("updateain", updateain_cmd, "Runs the reconstructed AIN full build, then writes a generated .ain dump without replacing the source file.", FCVAR_CHEAT);
