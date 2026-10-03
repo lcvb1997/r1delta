@@ -2558,6 +2558,16 @@ bool GetSQVMFuncs() {
 		"float sx, float sy, float sz, float ex, float ey, float ez, int hull",
 		"A* path over the AI node graph as a flat [x0, y0, z0, x1, ...] array (empty if unreachable)."
 	);
+	REGISTER_SCRIPT_FUNCTION(
+		SCRIPT_CONTEXT_SERVER,
+		"NavFindPathPilot",
+		(SQFUNCTION)Script_NavFindPathPilot,
+		".ffffffiff",
+		10,
+		"array",
+		"float sx, float sy, float sz, float ex, float ey, float ez, int hull, float maxRise, float maxGap",
+		"Like NavFindPath, but NPC traverse links (climbs, long jumps) are only used where a pilot can follow: at most maxRise up and maxGap across."
+	);
 
 	initialized = true;
 	return true;

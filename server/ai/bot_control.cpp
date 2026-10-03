@@ -178,8 +178,42 @@ bool LinkUsableByHull(const CAI_NodeLink* link, int hull)
 	return link && (link->hulls[hull] & kWalkableLinkMask) != 0;
 }
 
+// Links that are only NPC traverses (0x20/0x40 without the walk bit 0x01): vaults, jump-ups,
+// jump-downs, wall climbs of up to ~420 units and long jumps of up to ~1070 units, each played
+// as an animation by grunts/spectres. A pilot can only repeat some of them, so when limits are
+// active a traverse link is usable only up to maxRise of climb and maxGap of horizontal
+// distance (going down is always fine), and costs more than walking.
+struct TraverseLimits
+{
+	bool active = false;
+	float maxRise = 0.0f;
+	float maxGap = 0.0f;
+	float costScale = 2.0f;
+};
+
+constexpr unsigned char kWalkLinkBit = 0x01;
+
+bool TraverseLinkAllowed(const CAI_NodeLink* link, int hull, const Vector3f& from, const Vector3f& to,
+	const TraverseLimits& limits, float& costScale)
+{
+	costScale = 1.0f;
+	if (!limits.active || (link->hulls[hull] & kWalkLinkBit) != 0)
+		return true;
+
+	const float rise = to.z - from.z;
+	const float dx = to.x - from.x;
+	const float dy = to.y - from.y;
+	const float gap = std::sqrt(dx * dx + dy * dy);
+	if (rise > limits.maxRise || gap > limits.maxGap)
+		return false;
+
+	costScale = limits.costScale;
+	return true;
+}
+
 // Node ids match array indices for loaded graphs; links store ids.
-std::vector<int> FindPathNodes(const CAI_Network* network, int startNode, int goalNode, int hull)
+std::vector<int> FindPathNodes(const CAI_Network* network, int startNode, int goalNode, int hull,
+	const TraverseLimits& limits = TraverseLimits())
 {
 	std::vector<int> path;
 	const int nodeCount = network->nodecount;
@@ -222,7 +256,11 @@ std::vector<int> FindPathNodes(const CAI_Network* network, int startNode, int go
 				continue;
 
 			const Vector3f& neighborPosition = network->nodes[neighbor]->position;
-			const float tentative = gScore[current] + std::sqrt(DistanceSquared(node->position, neighborPosition));
+			float costScale = 1.0f;
+			if (!TraverseLinkAllowed(link, hull, node->position, neighborPosition, limits, costScale))
+				continue;
+
+			const float tentative = gScore[current] + costScale * std::sqrt(DistanceSquared(node->position, neighborPosition));
 			if (tentative >= gScore[neighbor])
 				continue;
 
@@ -249,6 +287,29 @@ void PushFloatArray(HSQUIRRELVM v, const std::vector<float>& values)
 		sq_pushfloat(ServerVM(), v, value);
 		sq_arrayappend(v, -2);
 	}
+}
+
+// A* from the node nearest start to the node nearest goal, pushed as a flat
+// [x0, y0, z0, x1, ...] array (empty when no path exists).
+void PushPath(HSQUIRRELVM v, const Vector3f& start, const Vector3f& goal, int hull, const TraverseLimits& limits)
+{
+	std::vector<float> flat;
+	const CAI_Network* network = GetAINetwork();
+	if (network)
+	{
+		const int startNode = FindNearestNode(network, start);
+		const int goalNode = FindNearestNode(network, goal);
+		const std::vector<int> nodes = FindPathNodes(network, startNode, goalNode, hull, limits);
+		flat.reserve(nodes.size() * 3);
+		for (int nodeIndex : nodes)
+		{
+			const Vector3f& position = network->nodes[nodeIndex]->position;
+			flat.push_back(position.x);
+			flat.push_back(position.y);
+			flat.push_back(position.z);
+		}
+	}
+	PushFloatArray(v, flat);
 }
 
 }
@@ -355,25 +416,28 @@ SQInteger Script_NavFindPath(HSQUIRRELVM v)
 	if (hull < 0 || hull >= MAX_HULLS)
 		return sq_throwerror(v, "invalid hull");
 
-	std::vector<float> flat;
-	const CAI_Network* network = GetAINetwork();
-	if (network)
-	{
-		const int startNode = FindNearestNode(network, { sx, sy, sz });
-		const int goalNode = FindNearestNode(network, { ex, ey, ez });
-		const std::vector<int> nodes = FindPathNodes(network, startNode, goalNode, hull);
-		flat.reserve(nodes.size() * 3);
-		for (int nodeIndex : nodes)
-		{
-			const Vector3f& position = network->nodes[nodeIndex]->position;
-			flat.push_back(position.x);
-			flat.push_back(position.y);
-			flat.push_back(position.z);
-		}
-	}
+	PushPath(v, { sx, sy, sz }, { ex, ey, ez }, hull, TraverseLimits());
+	return 1;
+}
 
-	// Flat [x0, y0, z0, x1, ...]; empty when no path exists.
-	PushFloatArray(v, flat);
+SQInteger Script_NavFindPathPilot(HSQUIRRELVM v)
+{
+	float sx, sy, sz, ex, ey, ez, maxRise, maxGap;
+	int hull;
+	if (!GetFloatArg(v, 2, sx) || !GetFloatArg(v, 3, sy) || !GetFloatArg(v, 4, sz)
+		|| !GetFloatArg(v, 5, ex) || !GetFloatArg(v, 6, ey) || !GetFloatArg(v, 7, ez) || !GetIntArg(v, 8, hull)
+		|| !GetFloatArg(v, 9, maxRise) || !GetFloatArg(v, 10, maxGap))
+	{
+		return sq_throwerror(v, "expected (float sx, float sy, float sz, float ex, float ey, float ez, int hull, float maxRise, float maxGap)");
+	}
+	if (hull < 0 || hull >= MAX_HULLS)
+		return sq_throwerror(v, "invalid hull");
+
+	TraverseLimits limits;
+	limits.active = true;
+	limits.maxRise = maxRise;
+	limits.maxGap = maxGap;
+	PushPath(v, { sx, sy, sz }, { ex, ey, ez }, hull, limits);
 	return 1;
 }
 

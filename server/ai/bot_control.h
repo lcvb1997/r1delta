@@ -53,3 +53,4 @@ SQInteger Script_BotGetDebugInfo(HSQUIRRELVM v);
 SQInteger Script_NavGetNodeCount(HSQUIRRELVM v);
 SQInteger Script_NavGetNodePosition(HSQUIRRELVM v);
 SQInteger Script_NavFindPath(HSQUIRRELVM v);
+SQInteger Script_NavFindPathPilot(HSQUIRRELVM v);
