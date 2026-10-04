@@ -9205,6 +9205,9 @@ do_server(const LDR_DLL_NOTIFICATION_DATA* notification_data)
 		RegisterConVar("delta_online_auth_enable", "0", FCVAR_GAMEDLL, "Whether to use master server auth");
 		RegisterConVar("delta_discord_username_sync", "0", FCVAR_GAMEDLL, "Controls if player names are synced with Discord: 0=Off,1=Norm,2=Pomelo");
 		RegisterConVar("riff_floorislava", "0", FCVAR_HIDDEN, "Enable floor is lava mode");
+		// Private match settings menu (pilot bots), sent to the lobby as UpdatePrivateMatchSetting.
+		RegisterConVar("pm_bot_count", "0", FCVAR_HIDDEN, "Private match: number of pilot bots (0-10). Managed by script");
+		RegisterConVar("pm_bot_lethality", "0", FCVAR_HIDDEN, "Private match: pilot bot lethality setting index. Managed by script");
 		const auto hudwarpConVars = r1delta::hudwarp::RegisterRuntimeConVars<ConVarR1>(
 			[](const char* name, const char* value, int flags, const char* helpString) {
 				return RegisterConVar(name, value, flags, helpString);
